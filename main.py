@@ -1,7 +1,7 @@
 # Totally basic code to pass first day in sushi go round
 # Script made to learn python
 # Only first two day of game covered
-# 07/05/2020 07:30 Piotr Rogalski
+# 08/05/2020 08:00 Piotr Rogalski
 
 # TODO: Day 3
 # TODO: Investigate bug when game adds less resources than delcared 10 or 5 (for example 8 instead of 10)
@@ -9,282 +9,238 @@
 import pyautogui
 import os
 import time
-import functools
-
-mouseIdle = (100, 250)
-list_res_ordered = []
-basicObjects = {}
-dict_res = dict(rice=10,
-                nori=10,
-                roe=10,
-                salmon=5,
-                shrimp=5,
-                unagi=5)
-
-gameStarted = False
 
 os.chdir(r'E:\DropBox\Dropbox\Elektronika\Programowanie\Python\SushiGoRound\assets')
+mouseIdle = (100, 250)
 
 
-def wrapper(func):
-    def function(*args, **kwargs):
-        start = time.time()
-        print('-' * 30)
-        print("Executing: {}".format(func.__name__))
-        print("Args: ")
-        print(args)
-        print("Kwargs: ")
-        print(kwargs)
-        result = func(*args, **kwargs)
-        print("Returned: {}".format(result))
-        print("Execution time: {}".format(time.time() - start))
-        return result
+class Meal:
+    def __init__(self, name, rice, nori, roe, salmon, shrimp, unagi, customerOrderImg):
+        self.name = name
+        self.rice = rice
+        self.nori = nori
+        self.roe = roe
+        self.salmon = salmon
+        self.shrimp = shrimp
+        self.unagi = unagi
+        self.customerOrderImg = customerOrderImg
 
-    return function
+    def check_resources(self):
+        if resource_rice.value < self.rice:
+            return False
+        elif resource_nori.value < self.nori:
+            return False
+        elif resource_roe.value < self.roe:
+            return False
+        elif resource_salmon.value < self.salmon:
+            return False
+        elif resource_shrimp.value < self.shrimp:
+            return False
+        elif resource_unagi.value < self.unagi:
+            return False
+        else:
+            return True
+
+    def prepare(self):
+        if self.check_resources():
+            wait_for_match('empty_table.png')
+            for i in range(self.rice):
+                resource_rice.put_on_table()
+            for i in range(self.nori):
+                resource_nori.put_on_table()
+            for i in range(self.roe):
+                resource_roe.put_on_table()
+            for i in range(self.salmon):
+                resource_salmon.put_on_table()
+            for i in range(self.shrimp):
+                resource_shrimp.put_on_table()
+            for i in range(self.unagi):
+                resource_unagi.put_on_table()
+            deliver.click()
 
 
-# This function starts game and maps some basic object on the screen
-def start_game():
-    # Determining game aera
-    top = pyautogui.locateOnScreen('top.png')
-    bottom = pyautogui.locateOnScreen('bottom.png')
-    work_area = (bottom[0], top[1], bottom[0] + bottom[2], bottom[1] + bottom[3])
+class Resource:
+    def __init__(self, name, initial_value, minimum, coordinates):
+        self.name = name
+        self.value = initial_value
+        self.minimum = minimum
+        self.coordinates = coordinates
+        self.last_ordered = time.time()
+        self.is_order_added = True
 
-    # Starting the game
-    click_on_match('play.png', work_area)
-    click_on_match('continue.png', work_area)
-    click_on_match('skip.png', work_area)
-    click_on_match('continue.png', work_area)
+    def put_on_table(self):
+        pyautogui.click(self.coordinates)
+        self.value -= 1
 
-    # Mapping basic objects in the screen and saving them to the dictionary
-    dict_map = dict(screen=work_area,
-                    res_rice=pyautogui.locateCenterOnScreen('rice.png', region=work_area),
-                    res_nori=pyautogui.locateCenterOnScreen('nori.png', region=work_area),
-                    res_roe=pyautogui.locateCenterOnScreen('roe.png', region=work_area),
-                    res_salmon=pyautogui.locateCenterOnScreen('salmon.png', region=work_area),
-                    phone=pyautogui.locateCenterOnScreen('phone.png', region=work_area),
-                    deliver=pyautogui.locateCenterOnScreen('empty_table.png', region=work_area))
+    def add(self):
+        if self.name == 'rice' or self.name == 'nori' or self.name == 'roe':
+            quantity = 10
+        else:
+            quantity = 5
+        self.value += quantity
+        print("Adding {} to {}, now: {}".format(quantity, self.name, self.value))
+        self.is_order_added = True
 
-    # Mapping inital phone menu
-    pyautogui.click(dict_map['phone'])
-    dict_map['select_rice'] = pyautogui.locateCenterOnScreen('select_rice.png', region=work_area)
-    dict_map['select_other'] = pyautogui.locateCenterOnScreen('select_other.png', region=work_area)
-    click_on_match('terminate_call.png', work_area)
+    def order(self):
+        if self.value < self.minimum and self.is_order_added:
+            phone.click()
+            if self.name == 'rice':
+                phone_select_rice.click()
+            else:
+                phone_select_other.click()
+            coordinates_order = check_if_match('{}_order.png'.format(self.name))
+            if coordinates_order is not False:
+                pyautogui.click(coordinates_order)
+                click_on_match('free_order.png')
+                self.last_ordered = time.time()
+                self.is_order_added = False
+            else:
+                click_on_match('terminate_call.png')
 
-    # Returning dictionary filled with coordinates of basic objects on the screen
-    return dict_map
+    def add_to_warehouse(self):
+        if self.is_order_added:
+            return
+        else:
+            if self.last_ordered + 5 < time.time():
+                self.add()
+
+    def check(self):
+        return self.value
+
+
+class ScreenObject:
+    def __init__(self, coordinates):
+        self.coordinates = coordinates
+
+    def click(self):
+        pyautogui.click(self.coordinates)
+        pyautogui.moveTo(mouseIdle)
 
 
 # This function checks if game day has finished and starts new day
-def check_next_level(area):
-    global dict_res
-    if pyautogui.locateOnScreen('win.png', region=area) is None:
-        return False
+def check_next_level():
+    if check_if_match('win.png') is False:
+        return
     start = time.time()
     while True:
-        if start + 10 <= time.time():
-            click_on_match('continue.png', area)
-            click_on_match('continue.png', area)
-            dict_res['rice'] = 10
-            dict_res['nori'] = 10
-            dict_res['roe'] = 10
-            dict_res['salmon'] = 5
-            dict_res['shrimp'] = 5
-            dict_res['unagi'] = 5
-
-            return True
+        if start + 15 <= time.time():
+            click_on_match('continue.png')
+            click_on_match('continue.png')
+            resource_rice.value = 10
+            resource_nori.value = 10
+            resource_roe.value = 10
+            resource_salmon.value = 5
+            resource_shrimp.value = 5
+            resource_unagi.value = 5
 
 
-def click_on_match(pattern, area, timeout=1):
+def click_on_match(pattern, timeout=1):
     start = time.time()
-    coordinates = pyautogui.locateCenterOnScreen(pattern, region=area)
-    while coordinates is None:
-        coordinates = pyautogui.locateCenterOnScreen(pattern, region=area)
+    coordinates = check_if_match(pattern)
+    while coordinates is False:
+        coordinates = check_if_match(pattern)
         if start + timeout < time.time():
-            return False
+            return
     pyautogui.click(coordinates)
     pyautogui.moveTo(mouseIdle)
 
 
-def click_on_match_if_possible(pattern, area):
-    coordinates = pyautogui.locateCenterOnScreen(pattern, region=area)
-    if coordinates is not None:
+def click_on_match_if_possible(pattern):
+    coordinates = check_if_match(pattern)
+    if coordinates is not False:
         pyautogui.click(coordinates)
-        return True
-    return False
 
 
-def wait_for_match(pattern, area, timeout=1):
+def wait_for_match(pattern, timeout=1):
     start = time.time()
-    while pyautogui.locateCenterOnScreen(pattern, region=area) is None:
+    while check_if_match(pattern) is False:
         if start + timeout < time.time():
-            return False
-    return True
+            return
 
 
-def check_if_match(pattern, area):
-    coordinates = pyautogui.locateCenterOnScreen(pattern, region=area)
+def check_if_match(pattern):
+    coordinates = pyautogui.locateCenterOnScreen(pattern, region=screen.coordinates)
     if coordinates is not None:
         return coordinates
     else:
         return False
 
 
-# This function tries to order new resources if possible, returns ordered resource and a timestamp or None
-def order(resource, objects):
-    pyautogui.click(objects['phone'])
-    if resource == 'rice':
-        pyautogui.click(objects['select_rice'])
-    else:
-        pyautogui.click(objects['select_other'])
-    coordinates = check_if_match('{}_order.png'.format(resource), objects['screen'])
-    if coordinates is not False:
-        pyautogui.click(coordinates)
-        click_on_match('free_order.png', objects['screen'])
-        return [resource, time.time()]
-    else:
-        click_on_match('terminate_call.png', objects['screen'])
-        return None
+def warehouse_keeper(resource_class_list):
+    for resource_class in resource_class_list:
+        resource_class.order()
+        resource_class.add_to_warehouse()
 
 
-def resupply(resource, minimum, objects):
-    global dict_res
-    global list_res_ordered
-    if dict_res[resource] <= minimum:
-        for entry in list_res_ordered:
-            if entry[0] == resource:
-                return
-        result = order(resource, objects)
-        if result is None:
-            return
-        list_res_ordered.append(result)
-        return True
-    return False
-
-
-# Game bug may be here - sometimes game add less resources than declared
-def warehouse_keeper():
-    global dict_res
-    global list_res_ordered
-    if not list_res_ordered:
-        return
-    remove_list = []
-    time_delay = 5
-    for i in range(len(list_res_ordered)):
-        if list_res_ordered[i][1] + time_delay < time.time():
-            if list_res_ordered[i][0] == 'shrimp' or list_res_ordered[i][0] == 'salmon' or list_res_ordered[i][0] == 'unagi':
-                dict_res[list_res_ordered[i][0]] += 5
-                print("Adding 5 to {} now: {}".format(list_res_ordered[i][0], dict_res[list_res_ordered[i][0]]))
-            else:
-                dict_res[list_res_ordered[i][0]] += 10
-                print("Adding 10 to {} now: {}".format(list_res_ordered[i][0], dict_res[list_res_ordered[i][0]]))
-            remove_list.append(i)
-    num_elems_to_remove = len(remove_list) - 1
-    for j in range(num_elems_to_remove, -1, -1):
-        list_res_ordered.pop(remove_list[j])
-
-
-def prepare_onigiri(objects):
-    global dict_res
-    if dict_res['rice'] < 2 or dict_res['nori'] < 1:
-        return False
-    if not wait_for_match('empty_table.png', objects['screen']):
-        return False
-    pyautogui.doubleClick(objects['res_rice'])
-    dict_res['rice'] -= 2
-    pyautogui.click(objects['res_nori'])
-    dict_res['nori'] -= 1
-    pyautogui.click(objects['deliver'])
-    return True
-
-
-def prepare_california_roll(objects):
-    global dict_res
-    if dict_res['rice'] < 1 or dict_res['nori'] < 1 or dict_res['roe'] < 1:
-        return False
-    if not wait_for_match('empty_table.png', objects['screen']):
-        return False
-    pyautogui.click(objects['res_rice'])
-    dict_res['rice'] -= 1
-    pyautogui.click(objects['res_nori'])
-    dict_res['nori'] -= 1
-    pyautogui.click(objects['res_roe'])
-    dict_res['roe'] -= 1
-    pyautogui.click(objects['deliver'])
-    return True
-
-
-def prepare_gunkan_maki(objects):
-    global dict_res
-    if dict_res['rice'] < 1 or dict_res['nori'] < 1 or dict_res['roe'] < 2:
-        return False
-    if not wait_for_match('empty_table.png', objects['screen']):
-        return False
-    pyautogui.click(objects['res_rice'])
-    dict_res['rice'] -= 1
-    pyautogui.click(objects['res_nori'])
-    dict_res['nori'] -= 1
-    pyautogui.doubleClick(objects['res_roe'])
-    dict_res['roe'] -= 2
-    pyautogui.click(objects['deliver'])
-    return True
-
-
-def prepare_salmon_roll(objects):
-    global dict_res
-    if dict_res['rice'] < 1 or dict_res['nori'] < 1 or dict_res['salmon'] < 2:
-        return False
-    if not wait_for_match('empty_table.png', objects['screen']):
-        return False
-    pyautogui.click(objects['res_rice'])
-    dict_res['rice'] -= 1
-    pyautogui.click(objects['res_nori'])
-    dict_res['nori'] -= 1
-    pyautogui.doubleClick(objects['res_salmon'])
-    dict_res['salmon'] -= 2
-    pyautogui.click(objects['deliver'])
-    return True
-
-
-def prepare_meal(meal, objects):
-    if meal == 'onigiri':
-        return prepare_onigiri(objects)
-    elif meal == 'california_roll':
-        return prepare_california_roll(objects)
-    elif meal == 'gunkan_maki':
-        return prepare_gunkan_maki(objects)
-    elif meal == 'salmon_roll':
-        return prepare_salmon_roll(objects)
-
-
-def check_orders_and_prepare_meals(meal, objects):
+def check_orders_and_prepare_meals(meal):
     orders = len(list(pyautogui.locateAllOnScreen(meal + '_customer.png')))
     prepared = len(list(pyautogui.locateAllOnScreen(meal + '_on_belt.png')))
     to_prepare = orders - prepared
     if to_prepare < 0:
         to_prepare = 0
     for i in range(to_prepare):
-        prepare_meal(meal, objects)
+        if meal == 'onigiri':
+            meal_onigiri.prepare()
+        elif meal == 'california_roll':
+            meal_california_roll.prepare()
+        elif meal == 'gunkan_maki':
+            meal_gunkan_maki.prepare()
+        elif meal == 'salmon_roll':
+            meal_salmon_roll.prepare()
+        elif meal == 'shrimp_sushi':
+            meal_shrimp_sushi.prepare()
 
 
-def empty_plates(area):
+def empty_plates():
     for i in range(1, 8):
-        click_on_match_if_possible('plate{}.png'.format(i), area)
+        click_on_match_if_possible('plate{}.png'.format(i))
 
 
-basicObjects = start_game()
+# Determining game screen area and creating ScreenObject class instance
+top = pyautogui.locateOnScreen('top.png')
+bottom = pyautogui.locateOnScreen('bottom.png')
+screen = ScreenObject((bottom[0], top[1], bottom[0] + bottom[2], bottom[1] + bottom[3]))
+
+# Starting the game
+click_on_match('play.png')
+click_on_match('continue.png')
+click_on_match('skip.png')
+click_on_match('continue.png')
+
+# Resource instances
+resource_rice = Resource('rice', 10, 7, pyautogui.locateCenterOnScreen('rice.png', region=screen.coordinates))
+resource_nori = Resource('nori', 10, 7, pyautogui.locateCenterOnScreen('nori.png', region=screen.coordinates))
+resource_roe = Resource('roe', 10, 7, pyautogui.locateCenterOnScreen('roe.png', region=screen.coordinates))
+resource_salmon = Resource('salmon', 5, 5, pyautogui.locateCenterOnScreen('salmon.png', region=screen.coordinates))
+resource_shrimp = Resource('shrimp', 5, 5, pyautogui.locateCenterOnScreen('shrimp.png', region=screen.coordinates))
+resource_unagi = Resource('unagi', 5, 5, pyautogui.locateCenterOnScreen('unagi.png', region=screen.coordinates))
+# Resource instances list
+resources = [resource_rice, resource_nori, resource_roe, resource_salmon, resource_shrimp, resource_unagi]
+
+# ScreenObject instances
+deliver = ScreenObject(pyautogui.locateCenterOnScreen('empty_table.png', region=screen.coordinates))
+phone = ScreenObject(pyautogui.locateCenterOnScreen('phone.png', region=screen.coordinates))
+phone.click()
+phone_select_rice = ScreenObject(pyautogui.locateCenterOnScreen('select_rice.png', region=screen.coordinates))
+phone_select_other = ScreenObject(pyautogui.locateCenterOnScreen('select_other.png', region=screen.coordinates))
+click_on_match('terminate_call.png')
+
+# Meal instances
+meal_onigiri = Meal('Onigiri', 2, 1, 0, 0, 0, 0, 'onigiri_customer.png')
+meal_california_roll = Meal('California Roll', 1, 1, 1, 0, 0, 0, 'california_roll_customer.png')
+meal_gunkan_maki = Meal('Gunkan Maki', 1, 1, 2, 0, 0, 0, 'gunkan_maki_customer.png')
+meal_salmon_roll = Meal('Salmon Roll', 1, 1, 0, 2, 0, 0, 'salmon_roll_customer.png')
+meal_shrimp_sushi = Meal('Shrimp Sushi', 1, 1, 0, 0, 2, 0, 'shrimp_sushi_customer.png')
+# Meal instances list
+meals = [meal_onigiri, meal_california_roll, meal_gunkan_maki, meal_salmon_roll, meal_shrimp_sushi]
 
 while True:
-    warehouse_keeper()
-    check_orders_and_prepare_meals('onigiri', basicObjects)
-    check_orders_and_prepare_meals('california_roll', basicObjects)
-    check_orders_and_prepare_meals('gunkan_maki', basicObjects)
-    check_orders_and_prepare_meals('salmon_roll', basicObjects)
-    empty_plates(basicObjects['screen'])
-    resupply('rice', 7, basicObjects)
-    resupply('nori', 7, basicObjects)
-    resupply('roe', 7, basicObjects)
-    resupply('salmon', 4, basicObjects)
-    warehouse_keeper()
-    empty_plates(basicObjects['screen'])
-    check_next_level(basicObjects['screen'])
+    warehouse_keeper(resources)
+    empty_plates()
+    check_orders_and_prepare_meals('onigiri')
+    check_orders_and_prepare_meals('california_roll')
+    empty_plates()
+    check_orders_and_prepare_meals('gunkan_maki')
+    check_orders_and_prepare_meals('salmon_roll')
+    empty_plates()
+    check_next_level()
