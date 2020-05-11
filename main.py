@@ -1,10 +1,10 @@
 # Totally basic code to play sushi go round
 # Script made to learn python
 # First three days of game covered
-# 09/05/2020 07:30 Piotr Rogalski
+# 11/05/2020 11:00 Piotr Rogalski
 
-# TODO: Day 4
 # TODO: Investigate bug when game adds less resources than delcared 10 or 5 (for example 8 instead of 10)
+# TODO: Map plates position on the 1st day
 
 import pyautogui
 import os
@@ -17,7 +17,7 @@ mouseIdle = (100, 250)
 class Meal:
     meals_list = []
 
-    def __init__(self, name, rice, nori, roe, salmon, shrimp, unagi, customerOrderImg):
+    def __init__(self, name, rice, nori, roe, salmon, shrimp, unagi, file):
         self.name = name
         self.rice = rice
         self.nori = nori
@@ -25,7 +25,7 @@ class Meal:
         self.salmon = salmon
         self.shrimp = shrimp
         self.unagi = unagi
-        self.customerOrderImg = customerOrderImg
+        self.file = file
         Meal.meals_list.append(self)
 
     def serve_meals(self):
@@ -69,12 +69,18 @@ class Meal:
             return True
 
     def __check_order_bubbles(self):
-        path = os.path.join(os.getcwd(), 'order_bubbles', self.customerOrderImg.format('_bubble') + '.png')
+        path = os.path.join(os.getcwd(), 'order_bubbles', self.file.format('_bubble') + '.png')
         return len(list(pyautogui.locateAllOnScreen(path, region=screen.coordinates)))
 
     def __check_meals_on_belt(self):
-        path = os.path.join(os.getcwd(), 'meals_belt', self.customerOrderImg.format('_on_belt') + '.png')
+        path = os.path.join(os.getcwd(), 'meals_belt', self.file.format('_on_belt') + '.png')
         return len(list(pyautogui.locateAllOnScreen(path, region=screen.coordinates)))
+
+    @staticmethod
+    def clean_plates():
+        for plate in Meal.meals_list:
+            path = os.path.join(os.getcwd(), 'plates', plate.file.format('_plate.png'))
+            ScreenObject.click_on_match_if_possible(path)
 
 
 class Resource:
@@ -130,13 +136,13 @@ class Resource:
         self.__quantity += add_to_quantity
         self.is_order_added = True
 
-    def __check_quantity(self):
+    @property
+    def quantity_property(self):
         return self.__quantity
 
-    def __update_quantity(self, newQuantity):
+    @quantity_property.setter
+    def quantity_property(self, newQuantity):
         self.__quantity = newQuantity
-
-    quantity_property = property(__check_quantity, __update_quantity, None, 'quantity property')
 
 
 class ScreenObject:
@@ -148,13 +154,11 @@ class ScreenObject:
         pyautogui.moveTo(mouseIdle)
 
     @staticmethod
-    def click_on_match(pattern, timeout=1):
+    def click_on_match(pattern):
         start = time.time()
         coordinates = ScreenObject.check_if_match(pattern)
         while coordinates is False:
             coordinates = ScreenObject.check_if_match(pattern)
-            if start + timeout < time.time():
-                return
         pyautogui.click(coordinates)
         pyautogui.moveTo(mouseIdle)
 
@@ -173,17 +177,10 @@ class ScreenObject:
             return False
 
     @staticmethod
-    def wait_for_match(pattern, timeout=1):
-        start = time.time()
+    def wait_for_match(pattern):
+        i = 1
         while ScreenObject.check_if_match(pattern) is False:
-            if start + timeout < time.time():
-                return
-
-    @staticmethod
-    def clean_plates():
-        for i in range(1, 9):
-            ScreenObject.click_on_match_if_possible('plate{}.png'.format(i))
-            # plate 9 - shrimp
+            Meal.clean_plates()
 
 
 # This function checks if game day has finished and starts new day
@@ -216,19 +213,19 @@ ScreenObject.click_on_match('skip.png')
 ScreenObject.click_on_match('continue.png')
 
 # Resource instances
-resource_rice = Resource('rice', 10, 7, pyautogui.locateCenterOnScreen('rice.png', region=screen.coordinates))
-resource_nori = Resource('nori', 10, 7, pyautogui.locateCenterOnScreen('nori.png', region=screen.coordinates))
-resource_roe = Resource('roe', 10, 7, pyautogui.locateCenterOnScreen('roe.png', region=screen.coordinates))
-resource_salmon = Resource('salmon', 5, 5, pyautogui.locateCenterOnScreen('salmon.png', region=screen.coordinates))
-resource_shrimp = Resource('shrimp', 5, 5, pyautogui.locateCenterOnScreen('shrimp.png', region=screen.coordinates))
-resource_unagi = Resource('unagi', 5, 5, pyautogui.locateCenterOnScreen('unagi.png', region=screen.coordinates))
+resource_rice = Resource('rice', 10, 7, ScreenObject.check_if_match('rice.png'))
+resource_nori = Resource('nori', 10, 7, ScreenObject.check_if_match('nori.png'))
+resource_roe = Resource('roe', 10, 7, ScreenObject.check_if_match('roe.png'))
+resource_salmon = Resource('salmon', 5, 5, ScreenObject.check_if_match('salmon.png'))
+resource_shrimp = Resource('shrimp', 5, 5, ScreenObject.check_if_match('shrimp.png'))
+resource_unagi = Resource('unagi', 5, 5, ScreenObject.check_if_match('unagi.png'))
 
 # ScreenObject instances
-deliver = ScreenObject(pyautogui.locateCenterOnScreen('empty_table.png', region=screen.coordinates))
-phone = ScreenObject(pyautogui.locateCenterOnScreen('phone.png', region=screen.coordinates))
+deliver = ScreenObject(ScreenObject.check_if_match('empty_table.png'))
+phone = ScreenObject(ScreenObject.check_if_match('phone.png'))
 phone.click()
-phone_select_rice = ScreenObject(pyautogui.locateCenterOnScreen('select_rice.png', region=screen.coordinates))
-phone_select_other = ScreenObject(pyautogui.locateCenterOnScreen('select_other.png', region=screen.coordinates))
+phone_select_rice = ScreenObject(ScreenObject.check_if_match('select_rice.png'))
+phone_select_other = ScreenObject(ScreenObject.check_if_match('select_other.png'))
 ScreenObject.click_on_match('terminate_call.png')
 
 # Meal instances
@@ -237,10 +234,13 @@ meal_california_roll = Meal('California Roll', 1, 1, 1, 0, 0, 0, 'california_rol
 meal_gunkan_maki = Meal('Gunkan Maki', 1, 1, 2, 0, 0, 0, 'gunkan_maki{}')
 meal_salmon_roll = Meal('Salmon Roll', 1, 1, 0, 2, 0, 0, 'salmon_roll{}')
 meal_shrimp_sushi = Meal('Shrimp Sushi', 1, 1, 0, 0, 2, 0, 'shrimp_sushi{}')
+meal_unagi_roll = Meal('Unagi Roll', 1, 1, 0, 0, 0, 2, 'unagi_roll{}')
+meal_dragon_roll = Meal('Dragon Roll', 2, 1, 1, 0, 0, 2, 'dragon_roll{}')
+meal_combo_sushi = Meal('Combo Sushi', 2, 1, 1, 1, 1, 1, 'combo_sushi{}')
 
 while True:
     Resource.warehouse_keeper()
     for meal in Meal.meals_list:
         meal.serve_meals()
-        ScreenObject.clean_plates()
+    Meal.clean_plates()
     check_next_level()
